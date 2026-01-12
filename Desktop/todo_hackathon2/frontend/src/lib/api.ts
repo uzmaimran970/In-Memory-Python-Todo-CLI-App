@@ -16,7 +16,7 @@ import {
 } from '@/types';
 import { getAuthToken, clearAuthToken } from './auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://in-memory-python-todo-cli-app-production.up.railway.app/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://in-memory-python-todo-cli-app-production.up.railway.app";
 // Log configuration on module load
 console.log('[API] Configuration loaded:', {
   API_BASE_URL,
