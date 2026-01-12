@@ -1,7 +1,5 @@
 """Application configuration using Pydantic Settings."""
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
-from typing import List
 
 
 class Settings(BaseSettings):
@@ -20,21 +18,26 @@ class Settings(BaseSettings):
     jwt_audience: str = "http://localhost:3000"
     jwt_issuer: str = "better-auth"
 
-    # CORS - accepts comma-separated string or JSON array
-    cors_origins: List[str] = ["http://localhost:3000"]
+    # CORS - comma-separated string
+    cors_origins: str = "http://localhost:3000"
 
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
     reload: bool = True
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v):
-        """Parse CORS origins from comma-separated string or list."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+    def get_cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from comma-separated string or JSON array."""
+        import json
+        value = self.cors_origins.strip()
+        # Try JSON array first
+        if value.startswith("["):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                pass
+        # Fall back to comma-separated
+        return [origin.strip() for origin in value.split(",") if origin.strip()]
 
     model_config = SettingsConfigDict(
         env_file=".env",
