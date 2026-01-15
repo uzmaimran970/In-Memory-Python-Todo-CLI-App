@@ -48,6 +48,8 @@ async def health_check():
 
 
 # Import and include routers
-from app.routers import tasks, auth
+from app.routers import tasks, auth, mcp, chat
 app.include_router(auth.router)
 app.include_router(tasks.router)
+app.include_router(mcp.router)  # MCP Tools router
+app.include_router(chat.router)  # AI Chatbot router

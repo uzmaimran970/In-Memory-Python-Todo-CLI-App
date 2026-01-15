@@ -1,7 +1,16 @@
 """SQLModel database models."""
 from sqlmodel import SQLModel, Field
+from sqlalchemy import Column, JSON
 from datetime import datetime
 from typing import Optional
+from uuid import uuid4
+from enum import Enum
+
+
+class MessageRole(str, Enum):
+    """Role of a message in a conversation."""
+    USER = "user"
+    ASSISTANT = "assistant"
 
 
 class User(SQLModel, table=True):
@@ -92,4 +101,72 @@ class Task(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         description="Task last update timestamp (UTC)"
+    )
+
+
+class Conversation(SQLModel, table=True):
+    """
+    Conversation model for chat sessions.
+    Each user has one active conversation at a time.
+    """
+    __tablename__ = "conversations"
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        primary_key=True,
+        description="Unique conversation ID"
+    )
+    user_id: str = Field(
+        unique=True,
+        nullable=False,
+        index=True,
+        description="Owner user ID (one conversation per user)"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        description="Conversation start timestamp"
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        description="Last activity timestamp"
+    )
+
+
+class Message(SQLModel, table=True):
+    """
+    Message model for chat messages.
+    Stores both user and assistant messages in a conversation.
+    """
+    __tablename__ = "messages"
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        primary_key=True,
+        description="Unique message ID"
+    )
+    conversation_id: str = Field(
+        nullable=False,
+        index=True,
+        description="Parent conversation ID"
+    )
+    role: MessageRole = Field(
+        nullable=False,
+        description="Message sender role (user/assistant)"
+    )
+    content: str = Field(
+        nullable=False,
+        description="Message text content"
+    )
+    tool_calls: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description="Tool calls made by assistant (JSON)"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        index=True,
+        description="Message timestamp"
     )

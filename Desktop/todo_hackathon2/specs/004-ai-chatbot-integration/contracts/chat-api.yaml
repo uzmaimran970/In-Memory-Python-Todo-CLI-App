@@ -1,0 +1,282 @@
+openapi: 3.1.0
+info:
+  title: TodoAI Chat API
+  description: |
+    AI-powered chatbot API for natural language task management.
+    Uses Cohere API for generation and tool calling.
+  version: 1.0.0
+  contact:
+    name: TodoAI Team
+
+servers:
+  - url: https://in-memory-python-todo-cli-app-production.up.railway.app
+    description: Production (Railway)
+  - url: http://localhost:8000
+    description: Local Development
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/chat:
+    post:
+      summary: Send chat message
+      description: |
+        Process a user message through the AI chatbot.
+        Supports task management via natural language.
+        Responds in user's detected language (English or Roman Urdu).
+      operationId: sendChatMessage
+      tags:
+        - Chat
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              addTask:
+                summary: Add task in English
+                value:
+                  message: "Add a task to buy groceries"
+              addTaskUrdu:
+                summary: Add task in Roman Urdu
+                value:
+                  message: "mujhe kal grocery leni hai"
+              listTasks:
+                summary: List tasks
+                value:
+                  message: "show my pending tasks"
+              completeTask:
+                summary: Complete task
+                value:
+                  message: "task 1 complete kar do"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+              examples:
+                taskCreated:
+                  summary: Task created response
+                  value:
+                    message: "Task 'Buy groceries' add ho gaya! Aur kuch karna hai?"
+                    conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+                    tool_calls:
+                      - name: add_task
+                        result:
+                          status: created
+                          task_id: 5
+                taskList:
+                  summary: Task list response
+                  value:
+                    message: |
+                      Aapke 3 pending tasks hain:
+                      1. Buy groceries
+                      2. Call mom
+                      3. Finish report
+                    conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+                    tool_calls:
+                      - name: list_tasks
+                        result:
+                          total: 3
+                          status_filter: pending
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Message cannot be empty"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Session expire ho gaya. Please login karein."
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Thoda ruko, bohot fast ho. Please 1 minute baad try karo."
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Abhi thodi problem hai. Please dobara try karein."
+
+  /api/chat/history:
+    get:
+      summary: Get conversation history
+      description: |
+        Retrieve recent conversation messages for display.
+        Returns last 50 messages by default.
+      operationId: getChatHistory
+      tags:
+        - Chat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of messages to return
+      responses:
+        '200':
+          description: Conversation history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatHistoryResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/clear:
+    delete:
+      summary: Clear conversation history
+      description: |
+        Delete all messages in user's conversation.
+        Conversation record is preserved, only messages cleared.
+      operationId: clearChatHistory
+      tags:
+        - Chat
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: History cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Chat history clear ho gaya."
+                  deleted_count:
+                    type: integer
+                    example: 25
+        '401':
+          description: Unauthorized
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Better Auth JWT token
+
+  schemas:
+    ChatRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: User's chat message
+          example: "mujhe kal grocery leni hai"
+
+    ChatResponse:
+      type: object
+      required:
+        - message
+        - conversation_id
+      properties:
+        message:
+          type: string
+          description: AI assistant's response
+          example: "Task 'Buy groceries' add ho gaya!"
+        conversation_id:
+          type: string
+          format: uuid
+          description: Conversation identifier
+        tool_calls:
+          type: array
+          description: MCP tools called during processing
+          items:
+            $ref: '#/components/schemas/ToolCall'
+          nullable: true
+
+    ToolCall:
+      type: object
+      properties:
+        name:
+          type: string
+          enum:
+            - add_task
+            - list_tasks
+            - complete_task
+            - delete_task
+            - update_task
+          description: MCP skill name
+        result:
+          type: object
+          description: Tool execution result
+          additionalProperties: true
+
+    ChatHistoryResponse:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageItem'
+        total:
+          type: integer
+          description: Total messages in conversation
+
+    MessageItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+            - user
+            - assistant
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Error message (user-friendly)
+
+tags:
+  - name: Chat
+    description: AI chatbot endpoints for natural language task management

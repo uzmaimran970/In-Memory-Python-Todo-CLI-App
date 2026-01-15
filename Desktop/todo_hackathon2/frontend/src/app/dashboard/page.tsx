@@ -15,6 +15,7 @@ import CreateTaskModal from '@/components/tasks/CreateTaskModal';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
 import DeleteTaskModal from '@/components/tasks/DeleteTaskModal';
 import Button from '@/components/ui/Button';
+import { ChatbotIcon } from '@/components/chat';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -232,6 +233,9 @@ export default function DashboardPage() {
         task={deletingTask}
         onTaskDeleted={handleTaskDeleted}
       />
+
+      {/* AI Chatbot Icon */}
+      <ChatbotIcon />
     </div>
   );
 }
