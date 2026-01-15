@@ -146,7 +146,7 @@ def chat_with_tools(
         co = cohere_client
 
         # Try different models in order of preference
-        models_to_try = ["command-r", "command", "command-light", "command-nightly"]
+        models_to_try = ["command-r7", "command-r", "command", "command-light", "command-nightly"]
         response = None
 
         for model in models_to_try:
@@ -213,7 +213,7 @@ def continue_with_tool_results(
         co = cohere_client
 
         # Try different models in order of preference
-        models_to_try = ["command-r", "command", "command-light", "command-nightly"]
+        models_to_try = ["command-r7", "command-r", "command", "command-light", "command-nightly"]
         response = None
 
         for model in models_to_try:
