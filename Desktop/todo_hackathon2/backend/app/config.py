@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     port: int = 8000
     reload: bool = True
 
-    # Cohere API
-    cohere_api_key: str  # Removed default value to ensure it's loaded from .env
+    # Cohere API (optional - chatbot will show error if not set)
+    cohere_api_key: str = ""
 
     def get_cors_origins_list(self) -> list[str]:
         """Parse CORS origins from comma-separated string or JSON array."""
@@ -52,5 +52,8 @@ class Settings(BaseSettings):
 # Global settings instance
 settings = Settings()
 
-# Print to confirm the key is loaded
-print("COHERE_API_KEY loaded:", settings.cohere_api_key)
+# Print to confirm the key is loaded (masked for security)
+if settings.cohere_api_key:
+    print(f"COHERE_API_KEY loaded: {settings.cohere_api_key[:8]}...{settings.cohere_api_key[-4:]}")
+else:
+    print("COHERE_API_KEY: NOT SET (chatbot will show error)")

@@ -2,14 +2,24 @@
 Cohere API Client for TodoAI Chatbot
 Handles AI generation with tool calling support for task management
 """
-from cohere import Client
-from app.config import settings
+import cohere
+import os
 from typing import Optional
 
-if not settings.cohere_api_key:
-    raise ValueError("COHERE_API_KEY missing! Check .env file or Railway variables.")
+# Lazy load Cohere client to prevent startup crashes
+_cohere_client = None
 
-cohere_client = Client(api_key=settings.cohere_api_key)
+def get_cohere_client():
+    """Get or create Cohere client with lazy initialization."""
+    global _cohere_client
+    if _cohere_client is None:
+        api_key = os.getenv("COHERE_API_KEY")
+        if not api_key:
+            print("[COHERE] WARNING: COHERE_API_KEY not set!")
+            return None
+        _cohere_client = cohere.ClientV2(api_key=api_key)
+        print(f"[COHERE] Client initialized successfully")
+    return _cohere_client
 
 # System preamble defining TodoAI personality and capabilities
 SYSTEM_PREAMBLE = """You are TodoAI, a friendly and helpful task management assistant for a todo application.
@@ -142,53 +152,110 @@ def chat_with_tools(
         - conversation_id: Cohere conversation ID
     """
     try:
-        # Use the global client directly
-        co = cohere_client
-
-        # Try different models in order of preference
-        models_to_try = ["command-r7", "command-r", "command", "command-light", "command-nightly"]
-        response = None
-
-        for model in models_to_try:
-            try:
-                response = co.chat(
-                    model=model,
-                    message=message,
-                    preamble=SYSTEM_PREAMBLE,
-                    chat_history=chat_history,
-                    tools=MCP_TOOLS,
-                    conversation_id=conversation_id
-                )
-                # If successful, break out of loop
-                break
-            except Exception as model_error:
-                print(f"[COHERE] Model {model} not available: {model_error}")
-                continue
-
-        # If no model worked, return error message
-        if response is None:
-            print("[COHERE] No models available for chat_with_tools")
+        co = get_cohere_client()
+        if co is None:
             return {
-                "text": "AI service abhi available nahi hai. Kuch models available nahi hain.",
+                "text": "AI service configure nahi hai. Admin se COHERE_API_KEY set karwayein.",
                 "tool_calls": [],
                 "conversation_id": conversation_id
             }
 
-        return {
-            "text": response.text or "",
-            "tool_calls": [
-                {
-                    "name": tc.name,
-                    "parameters": tc.parameters
+        # Convert chat history to V2 format
+        messages = []
+
+        # Add system message
+        messages.append({
+            "role": "system",
+            "content": SYSTEM_PREAMBLE
+        })
+
+        # Add chat history
+        for msg in chat_history:
+            role = "user" if msg.get("role") == "USER" else "assistant"
+            messages.append({
+                "role": role,
+                "content": msg.get("message", "")
+            })
+
+        # Add current user message
+        messages.append({
+            "role": "user",
+            "content": message
+        })
+
+        # Convert tools to V2 format
+        tools_v2 = []
+        for tool in MCP_TOOLS:
+            tool_def = {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
                 }
-                for tc in (response.tool_calls or [])
-            ],
-            "conversation_id": response.conversation_id
+            }
+            for param_name, param_def in tool.get("parameter_definitions", {}).items():
+                tool_def["function"]["parameters"]["properties"][param_name] = {
+                    "type": "string",
+                    "description": param_def.get("description", "")
+                }
+                if param_def.get("required", False):
+                    tool_def["function"]["parameters"]["required"].append(param_name)
+            tools_v2.append(tool_def)
+
+        print(f"[COHERE] Sending message: {message[:50]}...")
+
+        response = co.chat(
+            model="command-a-03-2025",
+            messages=messages,
+            tools=tools_v2
+        )
+
+        print(f"[COHERE] Response received, finish_reason: {response.finish_reason}")
+
+        # Extract text from response
+        response_text = ""
+        tool_calls = []
+
+        if response.message and response.message.content:
+            for content_item in response.message.content:
+                if hasattr(content_item, 'text'):
+                    response_text += content_item.text
+                elif hasattr(content_item, 'type') and content_item.type == 'text':
+                    response_text += getattr(content_item, 'text', '')
+
+        # Extract tool calls
+        if response.message and response.message.tool_calls:
+            for tc in response.message.tool_calls:
+                import json
+                params = tc.function.arguments
+                if isinstance(params, str):
+                    try:
+                        params = json.loads(params)
+                    except:
+                        params = {}
+                tool_calls.append({
+                    "name": tc.function.name,
+                    "parameters": params,
+                    "id": tc.id
+                })
+            print(f"[COHERE] Tool calls: {[tc['name'] for tc in tool_calls]}")
+
+        return {
+            "text": response_text,
+            "tool_calls": tool_calls,
+            "conversation_id": conversation_id or "default"
         }
     except Exception as e:
+        import traceback
         print(f"[COHERE] Error in chat_with_tools: {e}")
+        print(f"[COHERE] Traceback: {traceback.format_exc()}")
         return {
-            "text": "Maaf kijiye, abhi AI service mein problem hai. Thodi der baad try karein.",
+            "text": f"AI mein error: {str(e)[:100]}. Thodi der baad try karein.",
             "tool_calls": [],
             "conversation_id": conversation_id
         }
@@ -196,59 +263,116 @@ def chat_with_tools(
 
 def continue_with_tool_results(
     tool_results: list[dict],
-    conversation_id: str
+    conversation_id: str,
+    original_messages: list[dict] = None
 ) -> dict:
     """
     Continue conversation after tool execution with results.
 
     Args:
         tool_results: Results from executed tools
-        conversation_id: Cohere conversation ID to continue
+        conversation_id: Conversation ID for tracking
+        original_messages: Original messages to continue from
 
     Returns:
         dict containing final AI response
     """
     try:
-        # Use the global client directly
-        co = cohere_client
+        co = get_cohere_client()
+        if co is None:
+            # Format tool results as a simple response
+            results_text = []
+            for tr in tool_results:
+                call_info = tr.get("call", {})
+                outputs = tr.get("outputs", [{}])
+                result = outputs[0] if outputs else {}
 
-        # Try different models in order of preference
-        models_to_try = ["command-r7", "command-r", "command", "command-light", "command-nightly"]
-        response = None
+                if result.get("status") == "success":
+                    if call_info.get("name") == "add_task":
+                        results_text.append(f"Task '{result.get('title')}' add ho gaya!")
+                    elif call_info.get("name") == "list_tasks":
+                        tasks = result.get("tasks", [])
+                        if tasks:
+                            task_lines = [f"  {i+1}. {t['title']} {'✓' if t['completed'] else '○'}" for i, t in enumerate(tasks)]
+                            results_text.append(f"Aapke tasks:\n" + "\n".join(task_lines))
+                        else:
+                            results_text.append("Abhi koi task nahi hai.")
+                    elif call_info.get("name") == "complete_task":
+                        results_text.append(f"Task '{result.get('title')}' complete ho gaya! 🎉")
+                    elif call_info.get("name") == "delete_task":
+                        results_text.append(f"Task '{result.get('title')}' delete ho gaya.")
+                    else:
+                        results_text.append(result.get("message", "Done!"))
+                else:
+                    results_text.append(result.get("message", "Kuch problem ho gayi."))
 
-        for model in models_to_try:
-            try:
-                response = co.chat(
-                    model=model,
-                    message="",
-                    preamble=SYSTEM_PREAMBLE,
-                    tool_results=tool_results,
-                    conversation_id=conversation_id
-                )
-                # If successful, break out of loop
-                break
-            except Exception as model_error:
-                print(f"[COHERE] Model {model} not available for continue_with_tool_results: {model_error}")
-                continue
-
-        # If no model worked, return error message
-        if response is None:
-            print("[COHERE] No models available for continue_with_tool_results")
             return {
-                "text": "Tool execute ho gaya, lekin response mein problem aa gayi.",
+                "text": "\n".join(results_text) if results_text else "Kaam ho gaya!",
                 "tool_calls": [],
                 "conversation_id": conversation_id
             }
 
+        # Build messages with tool results for V2 API
+        import json
+        messages = [{"role": "system", "content": SYSTEM_PREAMBLE}]
+
+        # Add tool results as assistant tool_call + tool response
+        for tr in tool_results:
+            call_info = tr.get("call", {})
+            outputs = tr.get("outputs", [{}])
+
+            # Add assistant message with tool call
+            messages.append({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": call_info.get("id", "tool_1"),
+                    "type": "function",
+                    "function": {
+                        "name": call_info.get("name", "unknown"),
+                        "arguments": json.dumps(call_info.get("parameters", {}))
+                    }
+                }]
+            })
+
+            # Add tool result message
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call_info.get("id", "tool_1"),
+                "content": json.dumps(outputs[0] if outputs else {})
+            })
+
+        response = co.chat(
+            model="command-a-03-2025",
+            messages=messages
+        )
+
+        # Extract text from response
+        response_text = ""
+        if response.message and response.message.content:
+            for content_item in response.message.content:
+                if hasattr(content_item, 'text'):
+                    response_text += content_item.text
+
         return {
-            "text": response.text or "",
+            "text": response_text or "Kaam ho gaya!",
             "tool_calls": [],
-            "conversation_id": response.conversation_id
+            "conversation_id": conversation_id
         }
     except Exception as e:
+        import traceback
         print(f"[COHERE] Error in continue_with_tool_results: {e}")
+        print(f"[COHERE] Traceback: {traceback.format_exc()}")
+
+        # Fallback: format tool results directly
+        results_text = []
+        for tr in tool_results:
+            outputs = tr.get("outputs", [{}])
+            result = outputs[0] if outputs else {}
+            if result.get("message"):
+                results_text.append(result["message"])
+
         return {
-            "text": "Tool execute ho gaya, lekin response mein problem aa gayi.",
+            "text": "\n".join(results_text) if results_text else "Kaam ho gaya!",
             "tool_calls": [],
             "conversation_id": conversation_id
         }
