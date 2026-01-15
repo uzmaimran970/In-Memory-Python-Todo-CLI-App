@@ -2,25 +2,14 @@
 Cohere API Client for TodoAI Chatbot
 Handles AI generation with tool calling support for task management
 """
-import os
-from typing import Optional
+from cohere import Client
 from app.config import settings
+from typing import Optional
 
-# Lazy initialization of Cohere client
-_co = None
+if not settings.cohere_api_key:
+    raise ValueError("COHERE_API_KEY missing! Check .env file or Railway variables.")
 
-def get_cohere_client():
-    """Get or initialize Cohere client (lazy loading)."""
-    global _co
-    if _co is None:
-        api_key = settings.cohere_api_key
-        if not api_key or api_key == "":
-            print("[COHERE] WARNING: COHERE_API_KEY not set in settings!")
-            print(f"[COHERE] Current value: '{api_key}'")
-            return None
-        import cohere
-        _co = cohere.Client(api_key=api_key)
-    return _co
+cohere_client = Client(api_key=settings.cohere_api_key)
 
 # System preamble defining TodoAI personality and capabilities
 SYSTEM_PREAMBLE = """You are TodoAI, a friendly and helpful task management assistant for a todo application.
@@ -153,13 +142,8 @@ def chat_with_tools(
         - conversation_id: Cohere conversation ID
     """
     try:
-        co = get_cohere_client()
-        if co is None:
-            return {
-                "text": "AI service abhi available nahi hai. COHERE_API_KEY set nahi hai.",
-                "tool_calls": [],
-                "conversation_id": conversation_id
-            }
+        # Use the global client directly
+        co = cohere_client
 
         # Try different models in order of preference
         models_to_try = ["command-r", "command", "command-light", "command-nightly"]
@@ -225,13 +209,8 @@ def continue_with_tool_results(
         dict containing final AI response
     """
     try:
-        co = get_cohere_client()
-        if co is None:
-            return {
-                "text": "AI service abhi available nahi hai.",
-                "tool_calls": [],
-                "conversation_id": conversation_id
-            }
+        # Use the global client directly
+        co = cohere_client
 
         # Try different models in order of preference
         models_to_try = ["command-r", "command", "command-light", "command-nightly"]
