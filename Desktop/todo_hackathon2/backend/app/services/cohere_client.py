@@ -6,6 +6,7 @@ import cohere
 import os
 import json
 from typing import Optional
+from app.config import settings
 
 # Lazy load Cohere client to prevent startup crashes
 _cohere_client = None
@@ -14,9 +15,9 @@ def get_cohere_client():
     """Get or create Cohere client with lazy initialization."""
     global _cohere_client
     if _cohere_client is None:
-        api_key = os.getenv("COHERE_API_KEY")
+        api_key = settings.cohere_api_key
         if not api_key:
-            print("[COHERE] WARNING: COHERE_API_KEY not set!")
+            print("[COHERE] WARNING: COHERE_API_KEY not set in settings!")
             return None
         try:
             _cohere_client = cohere.ClientV2(api_key=api_key)

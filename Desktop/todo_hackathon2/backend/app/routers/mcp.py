@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.database import get_session
 from app.auth import get_current_user_id
-from app.mcp_tools.add_task import (
+from ..mcp_tools.add_task import (
     add_task_tool_async,
     AddTaskOutput,
     ADD_TASK_TOOL_SCHEMA
