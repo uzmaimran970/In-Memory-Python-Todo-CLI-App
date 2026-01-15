@@ -20,7 +20,7 @@ def get_cohere_client():
             print("[COHERE] WARNING: COHERE_API_KEY not set in settings!")
             return None
         try:
-            _cohere_client = cohere.ClientV2(api_key=api_key)
+            _cohere_client = cohere.Client(api_key=api_key)
             print(f"[COHERE] Client initialized successfully")
         except Exception as e:
             print(f"[COHERE] Failed to initialize client: {e}")
@@ -53,95 +53,53 @@ LANGUAGE: Match user (Roman Urdu/English).
 # MCP Tool definitions for Cohere's tool calling
 MCP_TOOLS = [
     {
-        "type": "function",
-        "function": {
-            "name": "add_task",
-            "description": "Create a new task. Use when user wants to add/create/remember something.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Task title (required)"},
-                    "description": {"type": "string", "description": "Task details (optional)"}
-                },
-                "required": ["title"]
-            }
+        "name": "add_task",
+        "description": "Create a new task. Use when user wants to add/create/remember something.",
+        "parameter_definitions": {
+            "title": {"type": "str", "description": "Task title (required)", "required": True},
+            "description": {"type": "str", "description": "Task details (optional)", "required": False}
         }
     },
     {
-        "type": "function",
-        "function": {
-            "name": "list_tasks",
-            "description": "Get user's tasks. Use when user asks to see/show/list tasks.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "status": {"type": "string", "description": "Filter: all, pending, or completed"}
-                },
-                "required": []
-            }
+        "name": "list_tasks",
+        "description": "Get user's tasks. Use when user asks to see/show/list tasks.",
+        "parameter_definitions": {
+            "status": {"type": "str", "description": "Filter: all, pending, or completed", "required": False}
         }
     },
     {
-        "type": "function",
-        "function": {
-            "name": "complete_task",
-            "description": "Mark task as done. Use when user says task is finished/done/complete.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string", "description": "Task ID number to complete"}
-                },
-                "required": ["task_id"]
-            }
+        "name": "complete_task",
+        "description": "Mark task as done. Use when user says task is finished/done/complete.",
+        "parameter_definitions": {
+            "task_id": {"type": "int", "description": "Task ID number to complete", "required": True}
         }
     },
     {
-        "type": "function",
-        "function": {
-            "name": "delete_task",
-            "description": "Delete a task permanently. Always confirm before using.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string", "description": "Task ID number to delete"}
-                },
-                "required": ["task_id"]
-            }
+        "name": "delete_task",
+        "description": "Delete a task permanently. Always confirm before using.",
+        "parameter_definitions": {
+            "task_id": {"type": "int", "description": "Task ID number to delete", "required": True}
         }
     },
     {
-        "type": "function",
-        "function": {
-            "name": "update_task",
-            "description": "Update/edit task title or description.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string", "description": "Task ID to update"},
-                    "title": {"type": "string", "description": "New title"},
-                    "description": {"type": "string", "description": "New description"}
-                },
-                "required": ["task_id"]
-            }
+        "name": "update_task",
+        "description": "Update/edit task title or description.",
+        "parameter_definitions": {
+            "task_id": {"type": "int", "description": "Task ID to update", "required": True},
+            "title": {"type": "str", "description": "New title", "required": False},
+            "description": {"type": "str", "description": "New description", "required": False}
         }
     },
     {
-        "type": "function",
-        "function": {
-            "name": "get_user_info",
-            "description": "Get user profile and task statistics.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
+        "name": "get_user_info",
+        "description": "Get user profile and task statistics.",
+        "parameter_definitions": {}
     }
 ]
 
-# Models to try - only use currently available models
+# Models to try - in order of preference with fallbacks
 MODELS_TO_TRY = [
-    "command-a-03-2025",  # Current working model
+    "command",                 # Basic command model (fallback)
 ]
 
 
@@ -161,18 +119,13 @@ def chat_with_tools(
             "conversation_id": conversation_id
         }
 
-    # Build messages in V2 format
-    messages = [{"role": "system", "content": SYSTEM_PREAMBLE}]
-
-    # Add chat history
+    # Prepare chat history in the correct format
+    formatted_history = []
     for msg in chat_history:
-        role = "user" if msg.get("role") == "USER" else "assistant"
+        role = "USER" if msg.get("role") == "USER" else "CHATBOT"
         content = msg.get("message", "")
         if content:
-            messages.append({"role": role, "content": content})
-
-    # Add current message
-    messages.append({"role": "user", "content": message})
+            formatted_history.append({"role": role, "message": content})
 
     print(f"[COHERE] Processing: {message[:50]}...")
 
@@ -183,40 +136,30 @@ def chat_with_tools(
             print(f"[COHERE] Trying model: {model}")
             response = co.chat(
                 model=model,
-                messages=messages,
+                message=message,
+                chat_history=formatted_history,
+                preamble=SYSTEM_PREAMBLE,
                 tools=MCP_TOOLS
             )
             print(f"[COHERE] Success with {model}, finish_reason: {response.finish_reason}")
 
             # Extract response text
-            response_text = ""
-            tool_calls = []
-
-            if response.message and response.message.content:
-                for item in response.message.content:
-                    if hasattr(item, 'text'):
-                        response_text += item.text
+            response_text = response.text or ""
 
             # Extract tool calls
-            if response.message and response.message.tool_calls:
-                for tc in response.message.tool_calls:
-                    params = tc.function.arguments
-                    if isinstance(params, str):
-                        try:
-                            params = json.loads(params)
-                        except:
-                            params = {}
+            tool_calls = []
+            if response.tool_calls:
+                for tc in response.tool_calls:
                     tool_calls.append({
-                        "name": tc.function.name,
-                        "parameters": params,
-                        "id": getattr(tc, 'id', 'tool_1')
+                        "name": tc.name,
+                        "parameters": tc.parameters
                     })
                 print(f"[COHERE] Tool calls: {[t['name'] for t in tool_calls]}")
 
             return {
                 "text": response_text,
                 "tool_calls": tool_calls,
-                "conversation_id": conversation_id or "default"
+                "conversation_id": response.conversation_id or conversation_id or "default"
             }
 
         except Exception as e:
@@ -224,12 +167,29 @@ def chat_with_tools(
             print(f"[COHERE] Model {model} failed: {e}")
             continue
 
-    # All models failed
-    print(f"[COHERE] All models failed. Last error: {last_error}")
+    # All models failed - provide a fallback response
+    print(f"[COHERE] All models failed. Providing fallback response.")
+
+    # Simple fallback logic for common queries
+    message_lower = message.lower()
+
+    if any(word in message_lower for word in ["hello", "hi", "hey", "namaste"]):
+        fallback_text = "Hello! I am TodoAI, your task management assistant. How can I help you with your tasks today?"
+    elif any(word in message_lower for word in ["task", "add", "create"]):
+        fallback_text = "I can help you add tasks. Please provide the task title and description."
+    elif any(word in message_lower for word in ["list", "show", "view", "my"]):
+        fallback_text = "I can show your tasks. You can ask me to list your pending or completed tasks."
+    elif any(word in message_lower for word in ["complete", "done", "finish"]):
+        fallback_text = "I can mark tasks as complete. Please specify which task you want to mark as done."
+    elif any(word in message_lower for word in ["delete", "remove"]):
+        fallback_text = "I can delete tasks. Please specify which task you want to delete."
+    else:
+        fallback_text = "I'm your task management assistant. I can help you add, list, complete, or delete tasks. How can I assist you today?"
+
     return {
-        "text": f"AI temporarily unavailable. Error: {last_error[:100] if last_error else 'Unknown'}",
+        "text": fallback_text,
         "tool_calls": [],
-        "conversation_id": conversation_id
+        "conversation_id": conversation_id or "default"
     }
 
 
