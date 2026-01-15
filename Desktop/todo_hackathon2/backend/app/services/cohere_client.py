@@ -16,6 +16,7 @@ def get_cohere_client():
         api_key = settings.cohere_api_key
         if not api_key or api_key == "":
             print("[COHERE] WARNING: COHERE_API_KEY not set in settings!")
+            print(f"[COHERE] Current value: '{api_key}'")
             return None
         import cohere
         _co = cohere.Client(api_key=api_key)
