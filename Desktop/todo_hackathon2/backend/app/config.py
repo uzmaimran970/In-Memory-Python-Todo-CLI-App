@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     reload: bool = True
 
     # Cohere API
-    cohere_api_key: str = ""
+    cohere_api_key: str  # Removed default value to ensure it's loaded from .env
 
     def get_cors_origins_list(self) -> list[str]:
         """Parse CORS origins from comma-separated string or JSON array."""
@@ -51,3 +51,6 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+# Print to confirm the key is loaded
+print("COHERE_API_KEY loaded:", settings.cohere_api_key)
