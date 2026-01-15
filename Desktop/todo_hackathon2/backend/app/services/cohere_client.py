@@ -27,23 +27,26 @@ def get_cohere_client():
     return _cohere_client
 
 # System preamble defining TodoAI personality and capabilities
-SYSTEM_PREAMBLE = """You are TodoAI, a friendly task management assistant.
+SYSTEM_PREAMBLE = """You are TodoAI. You MUST use tools for ALL task operations.
 
-LANGUAGE: Match user's language (Roman Urdu/Hinglish or English).
+RULE: When user mentions ANY task action, ALWAYS call the tool. No exceptions!
 
-TOOLS AVAILABLE:
-- add_task: Create new task (requires title)
-- list_tasks: Show tasks (optional status filter: all/pending/completed)
-- complete_task: Mark task done (requires task_id number)
-- delete_task: Remove task (requires task_id number)
-- update_task: Edit task (requires task_id)
-- get_user_info: Get user profile and stats
+TRIGGER WORDS → TOOL TO CALL:
+- "add", "create", "banana", "likh" → add_task(title=...)
+- "complete", "done", "hogya", "khatam", "finish", "mark" → complete_task(task_id=...)
+- "delete", "remove", "hata", "nikaal" → delete_task(task_id=...)
+- "show", "list", "dikhao", "batao", "dekh" → list_tasks()
+- "update", "change", "edit" → update_task(task_id=...)
 
-RULES:
-- Use tools to help users manage tasks
-- Keep responses short and friendly
-- Confirm deletions before executing
-- Celebrate completions!
+IMPORTANT: Even if user says "hogya hai" (past tense), they want you to MARK it complete. Call complete_task!
+
+EXAMPLES:
+- "task 5 complete hogya" → call complete_task(task_id="5")
+- "task 3 ho gaya" → call complete_task(task_id="3")
+- "doodh lana hai" → call add_task(title="doodh lana hai")
+- "mere tasks" → call list_tasks()
+
+LANGUAGE: Match user (Roman Urdu/English).
 """
 
 # MCP Tool definitions for Cohere's tool calling
@@ -135,12 +138,9 @@ MCP_TOOLS = [
     }
 ]
 
-# Models to try in order (most capable first)
+# Models to try - only use currently available models
 MODELS_TO_TRY = [
-    "command-r-plus",
-    "command-r",
-    "command-a-03-2025",
-    "command"
+    "command-a-03-2025",  # Current working model
 ]
 
 

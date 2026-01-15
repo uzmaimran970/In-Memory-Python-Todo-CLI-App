@@ -305,6 +305,92 @@ async def execute_tool(
         return {"status": "error", "message": str(e)}
 
 
+import re
+
+def detect_intent_from_message(message: str) -> dict | None:
+    """
+    Fallback intent detection when AI doesn't make tool calls.
+    Parses message for keywords and task IDs.
+    """
+    msg_lower = message.lower()
+
+    # Complete task patterns
+    complete_keywords = ["complete", "done", "hogya", "ho gaya", "hogaya", "khatam", "finish", "mark"]
+    if any(kw in msg_lower for kw in complete_keywords):
+        # Try to extract task ID
+        task_id = extract_task_id(message)
+        if task_id:
+            return {
+                "name": "complete_task",
+                "parameters": {"task_id": task_id},
+                "id": "fallback_complete"
+            }
+
+    # Delete task patterns
+    delete_keywords = ["delete", "remove", "hata", "nikaal", "del"]
+    if any(kw in msg_lower for kw in delete_keywords):
+        task_id = extract_task_id(message)
+        if task_id:
+            return {
+                "name": "delete_task",
+                "parameters": {"task_id": task_id},
+                "id": "fallback_delete"
+            }
+
+    # List tasks patterns
+    list_keywords = ["list", "show", "dikhao", "dikha", "batao", "mere task", "all task", "tasks"]
+    if any(kw in msg_lower for kw in list_keywords):
+        return {
+            "name": "list_tasks",
+            "parameters": {"status": "all"},
+            "id": "fallback_list"
+        }
+
+    # Add task patterns - check if message looks like a task to add
+    add_keywords = ["add", "create", "banana", "likh", "yaad", "remember"]
+    if any(kw in msg_lower for kw in add_keywords):
+        # Extract title (everything except the keyword)
+        title = extract_task_title(message)
+        if title:
+            return {
+                "name": "add_task",
+                "parameters": {"title": title},
+                "id": "fallback_add"
+            }
+
+    return None
+
+
+def extract_task_id(message: str) -> str | None:
+    """Extract task ID number from message."""
+    # Look for patterns like "task 5", "task number 5", "#5", "5 number task"
+    patterns = [
+        r'task\s*(?:number\s*)?(\d+)',
+        r'#(\d+)',
+        r'(\d+)\s*(?:number\s*)?task',
+        r'(\d+)\s*(?:wala|wali)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
+def extract_task_title(message: str) -> str | None:
+    """Extract task title from an add request."""
+    msg_lower = message.lower()
+    # Remove common add keywords
+    remove_words = ["add", "create", "karo", "kar", "do", "task", "banana", "banao", "bhi", "ek", "naya"]
+    title = message
+    for word in remove_words:
+        title = re.sub(rf'\b{word}\b', '', title, flags=re.IGNORECASE)
+    title = title.strip()
+    # Clean up extra spaces
+    title = re.sub(r'\s+', ' ', title).strip()
+    return title if len(title) > 2 else None
+
+
 async def process_chat_message(
     user_id: str,
     message: str,
@@ -339,6 +425,13 @@ async def process_chat_message(
     # Execute tool calls if any
     tool_results = []
     executed_tools = []
+
+    # If AI didn't make tool calls, try to detect intent from keywords
+    if not ai_response["tool_calls"]:
+        detected_tool = detect_intent_from_message(message)
+        if detected_tool:
+            ai_response["tool_calls"] = [detected_tool]
+            print(f"[CHAT SERVICE] Fallback: detected {detected_tool['name']} from message")
 
     if ai_response["tool_calls"]:
         for tool_call in ai_response["tool_calls"]:
