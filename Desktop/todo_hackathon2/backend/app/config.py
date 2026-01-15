@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     port: int = 8000
     reload: bool = True
 
+    # Cohere API
+    cohere_api_key: str = ""
+
     def get_cors_origins_list(self) -> list[str]:
         """Parse CORS origins from comma-separated string or JSON array."""
         import json
