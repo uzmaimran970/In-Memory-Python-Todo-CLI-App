@@ -4,6 +4,7 @@ Handles AI generation with tool calling support for task management
 """
 import cohere
 import os
+import json
 from typing import Optional
 
 # Lazy load Cohere client to prevent startup crashes
@@ -17,118 +18,129 @@ def get_cohere_client():
         if not api_key:
             print("[COHERE] WARNING: COHERE_API_KEY not set!")
             return None
-        _cohere_client = cohere.ClientV2(api_key=api_key)
-        print(f"[COHERE] Client initialized successfully")
+        try:
+            _cohere_client = cohere.ClientV2(api_key=api_key)
+            print(f"[COHERE] Client initialized successfully")
+        except Exception as e:
+            print(f"[COHERE] Failed to initialize client: {e}")
+            return None
     return _cohere_client
 
 # System preamble defining TodoAI personality and capabilities
-SYSTEM_PREAMBLE = """You are TodoAI, a friendly and helpful task management assistant for a todo application.
+SYSTEM_PREAMBLE = """You are TodoAI, a friendly task management assistant.
 
-LANGUAGE RULES:
-- If the user writes in Roman Urdu/Hinglish (like "mujhe grocery leni hai"), respond in Roman Urdu
-- If the user writes in English, respond in English
-- Be warm, encouraging, and supportive in all interactions
-- Use "aap" (respectful form) when addressing users in Roman Urdu
+LANGUAGE: Match user's language (Roman Urdu/Hinglish or English).
 
-CAPABILITIES (use these tools to help users):
-- add_task: Create new tasks for the user
-- list_tasks: Show user's tasks (can filter by status: all, pending, completed)
-- complete_task: Mark tasks as done
-- delete_task: Remove tasks (ALWAYS ask for confirmation before deleting)
-- update_task: Edit task title or description
-- get_user_info: Get user profile and task statistics
+TOOLS AVAILABLE:
+- add_task: Create new task (requires title)
+- list_tasks: Show tasks (optional status filter: all/pending/completed)
+- complete_task: Mark task done (requires task_id number)
+- delete_task: Remove task (requires task_id number)
+- update_task: Edit task (requires task_id)
+- get_user_info: Get user profile and stats
 
-BEHAVIOR GUIDELINES:
-- For ambiguous requests, ask clarifying questions before acting
-- ALWAYS confirm destructive actions (delete) before executing
-- Provide helpful suggestions when appropriate
-- Keep responses concise but friendly
-- When showing task lists, format them nicely with numbers
-- Celebrate when users complete tasks!
-
-EXAMPLE INTERACTIONS:
-- User: "add task buy milk" → Create task and confirm: "Task 'buy milk' add ho gaya!"
-- User: "mere tasks dikhao" → Show their tasks in a nice format
-- User: "task 1 delete karo" → Ask: "Kya aap sure hain ke 'task title' delete karna hai?"
+RULES:
+- Use tools to help users manage tasks
+- Keep responses short and friendly
+- Confirm deletions before executing
+- Celebrate completions!
 """
 
-# MCP Tool definitions for Cohere's tool calling feature
+# MCP Tool definitions for Cohere's tool calling
 MCP_TOOLS = [
     {
-        "name": "add_task",
-        "description": "Create a new task for the user. Use this when the user wants to add, create, or remember something as a task.",
-        "parameter_definitions": {
-            "title": {
-                "type": "str",
-                "description": "The task title/description (required)",
-                "required": True
-            },
-            "description": {
-                "type": "str",
-                "description": "Additional details about the task (optional)",
-                "required": False
+        "type": "function",
+        "function": {
+            "name": "add_task",
+            "description": "Create a new task. Use when user wants to add/create/remember something.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Task title (required)"},
+                    "description": {"type": "string", "description": "Task details (optional)"}
+                },
+                "required": ["title"]
             }
         }
     },
     {
-        "name": "list_tasks",
-        "description": "Get the user's tasks. Can filter by status. Use this when user asks to see, show, or list their tasks.",
-        "parameter_definitions": {
-            "status": {
-                "type": "str",
-                "description": "Filter tasks by status: 'all' (default), 'pending', or 'completed'",
-                "required": False
+        "type": "function",
+        "function": {
+            "name": "list_tasks",
+            "description": "Get user's tasks. Use when user asks to see/show/list tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "description": "Filter: all, pending, or completed"}
+                },
+                "required": []
             }
         }
     },
     {
-        "name": "complete_task",
-        "description": "Mark a task as completed/done. Use this when user says a task is done, finished, or complete.",
-        "parameter_definitions": {
-            "task_id": {
-                "type": "int",
-                "description": "The ID number of the task to mark as complete",
-                "required": True
+        "type": "function",
+        "function": {
+            "name": "complete_task",
+            "description": "Mark task as done. Use when user says task is finished/done/complete.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID number to complete"}
+                },
+                "required": ["task_id"]
             }
         }
     },
     {
-        "name": "delete_task",
-        "description": "Permanently delete a task. IMPORTANT: Always ask for confirmation before using this tool.",
-        "parameter_definitions": {
-            "task_id": {
-                "type": "int",
-                "description": "The ID number of the task to delete",
-                "required": True
+        "type": "function",
+        "function": {
+            "name": "delete_task",
+            "description": "Delete a task permanently. Always confirm before using.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID number to delete"}
+                },
+                "required": ["task_id"]
             }
         }
     },
     {
-        "name": "update_task",
-        "description": "Update/edit a task's title or description. Use when user wants to change or modify a task.",
-        "parameter_definitions": {
-            "task_id": {
-                "type": "int",
-                "description": "The ID number of the task to update",
-                "required": True
-            },
-            "title": {
-                "type": "str",
-                "description": "New title for the task (optional)",
-                "required": False
-            },
-            "description": {
-                "type": "str",
-                "description": "New description for the task (optional)",
-                "required": False
+        "type": "function",
+        "function": {
+            "name": "update_task",
+            "description": "Update/edit task title or description.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID to update"},
+                    "title": {"type": "string", "description": "New title"},
+                    "description": {"type": "string", "description": "New description"}
+                },
+                "required": ["task_id"]
             }
         }
     },
     {
-        "name": "get_user_info",
-        "description": "Get user profile information and task statistics. Use when user asks about their name, email, or task counts.",
-        "parameter_definitions": {}
+        "type": "function",
+        "function": {
+            "name": "get_user_info",
+            "description": "Get user profile and task statistics.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
+]
+
+# Models to try in order (most capable first)
+MODELS_TO_TRY = [
+    "command-r-plus",
+    "command-r",
+    "command-a-03-2025",
+    "command"
 ]
 
 
@@ -139,126 +151,85 @@ def chat_with_tools(
 ) -> dict:
     """
     Send a message to Cohere with tool calling support.
-
-    Args:
-        message: User's message text
-        chat_history: Previous messages formatted for Cohere
-        conversation_id: Optional Cohere conversation ID for context
-
-    Returns:
-        dict containing:
-        - text: AI response text
-        - tool_calls: List of tools to execute (if any)
-        - conversation_id: Cohere conversation ID
     """
-    try:
-        co = get_cohere_client()
-        if co is None:
-            return {
-                "text": "AI service configure nahi hai. Admin se COHERE_API_KEY set karwayein.",
-                "tool_calls": [],
-                "conversation_id": conversation_id
-            }
-
-        # Convert chat history to V2 format
-        messages = []
-
-        # Add system message
-        messages.append({
-            "role": "system",
-            "content": SYSTEM_PREAMBLE
-        })
-
-        # Add chat history
-        for msg in chat_history:
-            role = "user" if msg.get("role") == "USER" else "assistant"
-            messages.append({
-                "role": role,
-                "content": msg.get("message", "")
-            })
-
-        # Add current user message
-        messages.append({
-            "role": "user",
-            "content": message
-        })
-
-        # Convert tools to V2 format
-        tools_v2 = []
-        for tool in MCP_TOOLS:
-            tool_def = {
-                "type": "function",
-                "function": {
-                    "name": tool["name"],
-                    "description": tool["description"],
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                }
-            }
-            for param_name, param_def in tool.get("parameter_definitions", {}).items():
-                tool_def["function"]["parameters"]["properties"][param_name] = {
-                    "type": "string",
-                    "description": param_def.get("description", "")
-                }
-                if param_def.get("required", False):
-                    tool_def["function"]["parameters"]["required"].append(param_name)
-            tools_v2.append(tool_def)
-
-        print(f"[COHERE] Sending message: {message[:50]}...")
-
-        response = co.chat(
-            model="command-a-03-2025",
-            messages=messages,
-            tools=tools_v2
-        )
-
-        print(f"[COHERE] Response received, finish_reason: {response.finish_reason}")
-
-        # Extract text from response
-        response_text = ""
-        tool_calls = []
-
-        if response.message and response.message.content:
-            for content_item in response.message.content:
-                if hasattr(content_item, 'text'):
-                    response_text += content_item.text
-                elif hasattr(content_item, 'type') and content_item.type == 'text':
-                    response_text += getattr(content_item, 'text', '')
-
-        # Extract tool calls
-        if response.message and response.message.tool_calls:
-            for tc in response.message.tool_calls:
-                import json
-                params = tc.function.arguments
-                if isinstance(params, str):
-                    try:
-                        params = json.loads(params)
-                    except:
-                        params = {}
-                tool_calls.append({
-                    "name": tc.function.name,
-                    "parameters": params,
-                    "id": tc.id
-                })
-            print(f"[COHERE] Tool calls: {[tc['name'] for tc in tool_calls]}")
-
+    co = get_cohere_client()
+    if co is None:
         return {
-            "text": response_text,
-            "tool_calls": tool_calls,
-            "conversation_id": conversation_id or "default"
-        }
-    except Exception as e:
-        import traceback
-        print(f"[COHERE] Error in chat_with_tools: {e}")
-        print(f"[COHERE] Traceback: {traceback.format_exc()}")
-        return {
-            "text": f"AI mein error: {str(e)[:100]}. Thodi der baad try karein.",
+            "text": "AI service configure nahi hai. Please try again later.",
             "tool_calls": [],
             "conversation_id": conversation_id
         }
+
+    # Build messages in V2 format
+    messages = [{"role": "system", "content": SYSTEM_PREAMBLE}]
+
+    # Add chat history
+    for msg in chat_history:
+        role = "user" if msg.get("role") == "USER" else "assistant"
+        content = msg.get("message", "")
+        if content:
+            messages.append({"role": role, "content": content})
+
+    # Add current message
+    messages.append({"role": "user", "content": message})
+
+    print(f"[COHERE] Processing: {message[:50]}...")
+
+    # Try models in order
+    last_error = None
+    for model in MODELS_TO_TRY:
+        try:
+            print(f"[COHERE] Trying model: {model}")
+            response = co.chat(
+                model=model,
+                messages=messages,
+                tools=MCP_TOOLS
+            )
+            print(f"[COHERE] Success with {model}, finish_reason: {response.finish_reason}")
+
+            # Extract response text
+            response_text = ""
+            tool_calls = []
+
+            if response.message and response.message.content:
+                for item in response.message.content:
+                    if hasattr(item, 'text'):
+                        response_text += item.text
+
+            # Extract tool calls
+            if response.message and response.message.tool_calls:
+                for tc in response.message.tool_calls:
+                    params = tc.function.arguments
+                    if isinstance(params, str):
+                        try:
+                            params = json.loads(params)
+                        except:
+                            params = {}
+                    tool_calls.append({
+                        "name": tc.function.name,
+                        "parameters": params,
+                        "id": getattr(tc, 'id', 'tool_1')
+                    })
+                print(f"[COHERE] Tool calls: {[t['name'] for t in tool_calls]}")
+
+            return {
+                "text": response_text,
+                "tool_calls": tool_calls,
+                "conversation_id": conversation_id or "default"
+            }
+
+        except Exception as e:
+            last_error = str(e)
+            print(f"[COHERE] Model {model} failed: {e}")
+            continue
+
+    # All models failed
+    print(f"[COHERE] All models failed. Last error: {last_error}")
+    return {
+        "text": f"AI temporarily unavailable. Error: {last_error[:100] if last_error else 'Unknown'}",
+        "tool_calls": [],
+        "conversation_id": conversation_id
+    }
 
 
 def continue_with_tool_results(
@@ -268,111 +239,68 @@ def continue_with_tool_results(
 ) -> dict:
     """
     Continue conversation after tool execution with results.
-
-    Args:
-        tool_results: Results from executed tools
-        conversation_id: Conversation ID for tracking
-        original_messages: Original messages to continue from
-
-    Returns:
-        dict containing final AI response
+    Format results nicely for user.
     """
-    try:
-        co = get_cohere_client()
-        if co is None:
-            # Format tool results as a simple response
-            results_text = []
-            for tr in tool_results:
-                call_info = tr.get("call", {})
-                outputs = tr.get("outputs", [{}])
-                result = outputs[0] if outputs else {}
+    # Format tool results as human-readable response
+    results_text = []
 
-                if result.get("status") == "success":
-                    if call_info.get("name") == "add_task":
-                        results_text.append(f"Task '{result.get('title')}' add ho gaya!")
-                    elif call_info.get("name") == "list_tasks":
-                        tasks = result.get("tasks", [])
-                        if tasks:
-                            task_lines = [f"  {i+1}. {t['title']} {'✓' if t['completed'] else '○'}" for i, t in enumerate(tasks)]
-                            results_text.append(f"Aapke tasks:\n" + "\n".join(task_lines))
-                        else:
-                            results_text.append("Abhi koi task nahi hai.")
-                    elif call_info.get("name") == "complete_task":
-                        results_text.append(f"Task '{result.get('title')}' complete ho gaya! 🎉")
-                    elif call_info.get("name") == "delete_task":
-                        results_text.append(f"Task '{result.get('title')}' delete ho gaya.")
-                    else:
-                        results_text.append(result.get("message", "Done!"))
+    for tr in tool_results:
+        call_info = tr.get("call", {})
+        outputs = tr.get("outputs", [{}])
+        result = outputs[0] if outputs else {}
+        tool_name = call_info.get("name", "")
+
+        if result.get("status") == "success":
+            if tool_name == "add_task":
+                title = result.get("title", "task")
+                results_text.append(f"Task '{title}' add ho gaya! ✓")
+
+            elif tool_name == "list_tasks":
+                tasks = result.get("tasks", [])
+                if tasks:
+                    lines = [f"\nAapke tasks ({len(tasks)}):"]
+                    for i, t in enumerate(tasks, 1):
+                        status = "✓" if t.get("completed") else "○"
+                        lines.append(f"  {i}. [{t.get('id')}] {t.get('title')} {status}")
+                    results_text.append("\n".join(lines))
                 else:
-                    results_text.append(result.get("message", "Kuch problem ho gayi."))
+                    results_text.append("Abhi koi task nahi hai. Naya task add karein!")
 
-            return {
-                "text": "\n".join(results_text) if results_text else "Kaam ho gaya!",
-                "tool_calls": [],
-                "conversation_id": conversation_id
-            }
+            elif tool_name == "complete_task":
+                title = result.get("title", "task")
+                results_text.append(f"Task '{title}' complete ho gaya! 🎉 Shabash!")
 
-        # Build messages with tool results for V2 API
-        import json
-        messages = [{"role": "system", "content": SYSTEM_PREAMBLE}]
+            elif tool_name == "delete_task":
+                title = result.get("title", "task")
+                results_text.append(f"Task '{title}' delete ho gaya. ✓")
 
-        # Add tool results as assistant tool_call + tool response
-        for tr in tool_results:
-            call_info = tr.get("call", {})
-            outputs = tr.get("outputs", [{}])
+            elif tool_name == "update_task":
+                results_text.append(f"Task update ho gaya! ✓")
 
-            # Add assistant message with tool call
-            messages.append({
-                "role": "assistant",
-                "tool_calls": [{
-                    "id": call_info.get("id", "tool_1"),
-                    "type": "function",
-                    "function": {
-                        "name": call_info.get("name", "unknown"),
-                        "arguments": json.dumps(call_info.get("parameters", {}))
-                    }
-                }]
-            })
+            elif tool_name == "get_user_info":
+                user = result.get("user", {})
+                stats = result.get("stats", {})
+                name = user.get("name", "User")
+                total = stats.get("total_tasks", 0)
+                pending = stats.get("pending_tasks", 0)
+                completed = stats.get("completed_tasks", 0)
+                results_text.append(
+                    f"Hello {name}!\n"
+                    f"Total tasks: {total}\n"
+                    f"Pending: {pending} | Completed: {completed}"
+                )
+            else:
+                msg = result.get("message", "Done!")
+                results_text.append(msg)
+        else:
+            # Error case
+            error_msg = result.get("message", "Kuch problem ho gayi.")
+            results_text.append(f"⚠️ {error_msg}")
 
-            # Add tool result message
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call_info.get("id", "tool_1"),
-                "content": json.dumps(outputs[0] if outputs else {})
-            })
+    final_text = "\n".join(results_text) if results_text else "Kaam ho gaya!"
 
-        response = co.chat(
-            model="command-a-03-2025",
-            messages=messages
-        )
-
-        # Extract text from response
-        response_text = ""
-        if response.message and response.message.content:
-            for content_item in response.message.content:
-                if hasattr(content_item, 'text'):
-                    response_text += content_item.text
-
-        return {
-            "text": response_text or "Kaam ho gaya!",
-            "tool_calls": [],
-            "conversation_id": conversation_id
-        }
-    except Exception as e:
-        import traceback
-        print(f"[COHERE] Error in continue_with_tool_results: {e}")
-        print(f"[COHERE] Traceback: {traceback.format_exc()}")
-
-        # Fallback: format tool results directly
-        results_text = []
-        for tr in tool_results:
-            outputs = tr.get("outputs", [{}])
-            result = outputs[0] if outputs else {}
-            if result.get("message"):
-                results_text.append(result["message"])
-
-        return {
-            "text": "\n".join(results_text) if results_text else "Kaam ho gaya!",
-            "tool_calls": [],
-            "conversation_id": conversation_id
-        }
+    return {
+        "text": final_text,
+        "tool_calls": [],
+        "conversation_id": conversation_id
+    }
