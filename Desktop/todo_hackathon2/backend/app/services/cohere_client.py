@@ -3,11 +3,22 @@ Cohere API Client for TodoAI Chatbot
 Handles AI generation with tool calling support for task management
 """
 import os
-import cohere
 from typing import Optional
 
-# Initialize Cohere client
-co = cohere.Client(api_key=os.getenv("COHERE_API_KEY"))
+# Lazy initialization of Cohere client
+_co = None
+
+def get_cohere_client():
+    """Get or initialize Cohere client (lazy loading)."""
+    global _co
+    if _co is None:
+        api_key = os.getenv("COHERE_API_KEY")
+        if not api_key:
+            print("[COHERE] WARNING: COHERE_API_KEY not set!")
+            return None
+        import cohere
+        _co = cohere.Client(api_key=api_key)
+    return _co
 
 # System preamble defining TodoAI personality and capabilities
 SYSTEM_PREAMBLE = """You are TodoAI, a friendly and helpful task management assistant for a todo application.
@@ -140,6 +151,14 @@ def chat_with_tools(
         - conversation_id: Cohere conversation ID
     """
     try:
+        co = get_cohere_client()
+        if co is None:
+            return {
+                "text": "AI service abhi available nahi hai. COHERE_API_KEY set nahi hai.",
+                "tool_calls": [],
+                "conversation_id": conversation_id
+            }
+
         response = co.chat(
             model="command-r-plus",
             message=message,
@@ -184,6 +203,14 @@ def continue_with_tool_results(
         dict containing final AI response
     """
     try:
+        co = get_cohere_client()
+        if co is None:
+            return {
+                "text": "AI service abhi available nahi hai.",
+                "tool_calls": [],
+                "conversation_id": conversation_id
+            }
+
         response = co.chat(
             model="command-r-plus",
             message="",
