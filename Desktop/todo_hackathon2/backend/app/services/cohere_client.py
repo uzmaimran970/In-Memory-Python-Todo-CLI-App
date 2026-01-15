@@ -4,6 +4,7 @@ Handles AI generation with tool calling support for task management
 """
 import os
 from typing import Optional
+from app.config import settings
 
 # Lazy initialization of Cohere client
 _co = None
@@ -12,9 +13,9 @@ def get_cohere_client():
     """Get or initialize Cohere client (lazy loading)."""
     global _co
     if _co is None:
-        api_key = os.getenv("COHERE_API_KEY")
-        if not api_key:
-            print("[COHERE] WARNING: COHERE_API_KEY not set!")
+        api_key = settings.cohere_api_key
+        if not api_key or api_key == "":
+            print("[COHERE] WARNING: COHERE_API_KEY not set in settings!")
             return None
         import cohere
         _co = cohere.Client(api_key=api_key)
@@ -159,14 +160,34 @@ def chat_with_tools(
                 "conversation_id": conversation_id
             }
 
-        response = co.chat(
-            model="command-r-plus",
-            message=message,
-            preamble=SYSTEM_PREAMBLE,
-            chat_history=chat_history,
-            tools=MCP_TOOLS,
-            conversation_id=conversation_id
-        )
+        # Try different models in order of preference
+        models_to_try = ["command-r", "command", "command-light", "command-nightly"]
+        response = None
+
+        for model in models_to_try:
+            try:
+                response = co.chat(
+                    model=model,
+                    message=message,
+                    preamble=SYSTEM_PREAMBLE,
+                    chat_history=chat_history,
+                    tools=MCP_TOOLS,
+                    conversation_id=conversation_id
+                )
+                # If successful, break out of loop
+                break
+            except Exception as model_error:
+                print(f"[COHERE] Model {model} not available: {model_error}")
+                continue
+
+        # If no model worked, return error message
+        if response is None:
+            print("[COHERE] No models available for chat_with_tools")
+            return {
+                "text": "AI service abhi available nahi hai. Kuch models available nahi hain.",
+                "tool_calls": [],
+                "conversation_id": conversation_id
+            }
 
         return {
             "text": response.text or "",
@@ -211,13 +232,33 @@ def continue_with_tool_results(
                 "conversation_id": conversation_id
             }
 
-        response = co.chat(
-            model="command-r-plus",
-            message="",
-            preamble=SYSTEM_PREAMBLE,
-            tool_results=tool_results,
-            conversation_id=conversation_id
-        )
+        # Try different models in order of preference
+        models_to_try = ["command-r", "command", "command-light", "command-nightly"]
+        response = None
+
+        for model in models_to_try:
+            try:
+                response = co.chat(
+                    model=model,
+                    message="",
+                    preamble=SYSTEM_PREAMBLE,
+                    tool_results=tool_results,
+                    conversation_id=conversation_id
+                )
+                # If successful, break out of loop
+                break
+            except Exception as model_error:
+                print(f"[COHERE] Model {model} not available for continue_with_tool_results: {model_error}")
+                continue
+
+        # If no model worked, return error message
+        if response is None:
+            print("[COHERE] No models available for continue_with_tool_results")
+            return {
+                "text": "Tool execute ho gaya, lekin response mein problem aa gayi.",
+                "tool_calls": [],
+                "conversation_id": conversation_id
+            }
 
         return {
             "text": response.text or "",
