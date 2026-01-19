@@ -18,11 +18,18 @@ try:
         ADD_TASK_TOOL_SCHEMA
     )
 except ImportError:
-    from app.mcp_tools.add_task import (
-        add_task_tool_async,
-        AddTaskOutput,
-        ADD_TASK_TOOL_SCHEMA
-    )
+    try:
+        from app.mcp_tools.add_task import (
+            add_task_tool_async,
+            AddTaskOutput,
+            ADD_TASK_TOOL_SCHEMA
+        )
+    except ImportError:
+        from .mcp_tools.add_task import (
+            add_task_tool_async,
+            AddTaskOutput,
+            ADD_TASK_TOOL_SCHEMA
+        )
 
 
 # Router with /api/mcp prefix
