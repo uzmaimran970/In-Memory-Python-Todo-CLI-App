@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "todo-server": {
+      "command": "python",
+      "args": ["backend/mcp_server.py"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "BETTER_AUTH_SECRET": "${BETTER_AUTH_SECRET}"
+      }
+    }
+  }
+}
