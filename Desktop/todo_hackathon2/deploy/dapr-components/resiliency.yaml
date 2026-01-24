@@ -1,0 +1,73 @@
+# Phase 5: Dapr Resiliency Policy (T079)
+# Retry policies for pub/sub and service invocation
+apiVersion: dapr.io/v1alpha1
+kind: Resiliency
+metadata:
+  name: todo-resiliency
+  namespace: todo-app
+spec:
+  policies:
+    retries:
+      # Retry policy for pub/sub message processing
+      pubsubRetry:
+        policy: exponential
+        maxInterval: 30s
+        maxRetries: 5
+        duration: 2s
+
+      # Retry policy for service invocation
+      serviceRetry:
+        policy: exponential
+        maxInterval: 15s
+        maxRetries: 3
+        duration: 1s
+
+      # Retry policy for state store operations
+      stateRetry:
+        policy: constant
+        duration: 1s
+        maxRetries: 3
+
+    circuitBreakers:
+      # Circuit breaker for external services
+      serviceCB:
+        maxRequests: 3
+        interval: 10s
+        timeout: 30s
+        trip: consecutiveFailures >= 5
+
+    timeouts:
+      # Default timeout for operations
+      defaultTimeout: 10s
+      longTimeout: 30s
+
+  targets:
+    components:
+      taskpubsub:
+        inbound:
+          retry: pubsubRetry
+        outbound:
+          retry: pubsubRetry
+          timeout: defaultTimeout
+      statestore:
+        outbound:
+          retry: stateRetry
+          timeout: defaultTimeout
+
+    apps:
+      backend-svc:
+        retry: serviceRetry
+        circuitBreaker: serviceCB
+        timeout: longTimeout
+      recurring-svc:
+        retry: serviceRetry
+        timeout: defaultTimeout
+      notification-svc:
+        retry: serviceRetry
+        timeout: defaultTimeout
+      websocket-svc:
+        retry: serviceRetry
+        timeout: defaultTimeout
+      audit-svc:
+        retry: serviceRetry
+        timeout: defaultTimeout

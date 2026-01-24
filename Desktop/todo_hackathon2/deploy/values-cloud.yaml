@@ -1,0 +1,134 @@
+# Cloud Deployment Values (Phase 5 - T076)
+# For use with cloud-managed Kafka (Redpanda Cloud / Confluent Cloud)
+# Usage: helm upgrade --install todoapp ./helm-charts/ -f values-cloud.yaml
+
+global:
+  environment: production
+  imageRegistry: ghcr.io
+  imagePullPolicy: Always
+
+# Backend Service
+backend:
+  replicaCount: 2
+  image:
+    tag: latest
+  env:
+    DAPR_ENABLED: "true"
+    RELOAD: "false"
+    HOST: "0.0.0.0"
+    PORT: "8000"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Frontend Service
+frontend:
+  replicaCount: 2
+  image:
+    tag: latest
+  env:
+    NEXT_PUBLIC_API_URL: ""  # Set via --set or secrets
+    NEXT_PUBLIC_WS_URL: ""   # Set via --set or secrets
+
+# Microservices
+recurring-service:
+  replicaCount: 1
+  env:
+    APP_PORT: "8001"
+
+notification-service:
+  replicaCount: 1
+  env:
+    APP_PORT: "8002"
+
+websocket-service:
+  replicaCount: 2
+  env:
+    APP_PORT: "8003"
+
+audit-service:
+  replicaCount: 1
+  env:
+    APP_PORT: "8004"
+
+# Dapr Pub/Sub Configuration for Redpanda Cloud
+dapr:
+  pubsub:
+    name: taskpubsub
+    type: pubsub.kafka
+    version: v1
+    metadata:
+      # Redpanda Cloud / Confluent Cloud connection
+      brokers: ""                    # Set via --set: e.g., "broker.redpanda.cloud:9092"
+      authType: "password"
+      saslUsername: ""               # Set via secrets
+      saslPassword: ""               # Set via secrets
+      saslMechanism: "SCRAM-SHA-256"
+      requiredAcks: "all"
+      maxMessageBytes: "1048576"     # 1MB max message
+
+  statestore:
+    name: statestore
+    type: state.postgresql
+    version: v1
+    metadata:
+      connectionString: ""           # Set via secrets (Neon PostgreSQL)
+
+# Topics Configuration
+kafka:
+  topics:
+    - name: task-events
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"     # 7 days
+        cleanup.policy: "delete"
+
+    - name: reminders
+      partitions: 2
+      replicationFactor: 3
+      config:
+        retention.ms: "259200000"     # 3 days
+        cleanup.policy: "delete"
+
+    - name: task-updates
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "86400000"      # 1 day
+        cleanup.policy: "delete"
+
+    # Dead Letter Topics (DLQ)
+    - name: task-events-dlq
+      partitions: 1
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"    # 30 days
+        cleanup.policy: "delete"
+
+    - name: reminders-dlq
+      partitions: 1
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"    # 30 days
+        cleanup.policy: "delete"
+
+    - name: task-updates-dlq
+      partitions: 1
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"    # 30 days
+        cleanup.policy: "delete"
+
+# Secrets (provide via --set or external secrets manager)
+secrets:
+  databaseUrl: ""                     # Neon PostgreSQL URL
+  betterAuthSecret: ""                # JWT signing secret
+  cohereApiKey: ""                    # Cohere API key
+  kafkaBrokers: ""                    # Redpanda Cloud brokers
+  kafkaUsername: ""                   # SASL username
+  kafkaPassword: ""                   # SASL password
