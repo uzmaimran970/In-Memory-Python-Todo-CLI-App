@@ -1,0 +1,6 @@
+apiVersion: v2
+name: todo-postgres
+description: PostgreSQL database for Todo Application
+type: application
+version: 0.1.0
+appVersion: "15"

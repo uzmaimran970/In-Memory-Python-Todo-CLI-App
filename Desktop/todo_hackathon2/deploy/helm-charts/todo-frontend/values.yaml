@@ -1,0 +1,27 @@
+replicaCount: 1
+
+image:
+  repository: todo-frontend
+  pullPolicy: Never  # Use local image from minikube's Docker daemon
+  tag: "latest"
+
+service:
+  type: NodePort
+  port: 8080          # Service port (exposed to cluster)
+  targetPort: 3000    # Container port (where Next.js listens)
+  nodePort: 30080     # External access (must be 30000-32767 range)
+
+env:
+  # Internal Kubernetes service URL for backend
+  BACKEND_URL: "http://todo-backend-backend:8000"
+  NODE_ENV: "production"
+  PORT: "3000"
+  HOSTNAME: "0.0.0.0"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

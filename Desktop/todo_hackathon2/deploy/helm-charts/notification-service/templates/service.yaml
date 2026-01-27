@@ -1,0 +1,13 @@
+# T016: Notification Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-notification
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8001
+      protocol: TCP
+  selector:
+    app: notification-svc

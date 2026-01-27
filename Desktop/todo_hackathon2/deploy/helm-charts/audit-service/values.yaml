@@ -1,0 +1,22 @@
+# T018: Audit Service values
+replicaCount: 1
+
+image:
+  repository: audit-svc
+  pullPolicy: Never
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 8003
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+env:
+  DATABASE_URL: ""

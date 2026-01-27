@@ -1,0 +1,30 @@
+# T017: Recurring Task Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-recurring
+  labels:
+    app: recurring-svc
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: recurring-svc
+  template:
+    metadata:
+      labels:
+        app: recurring-svc
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "recurring-svc"
+        dapr.io/app-port: "8002"
+        dapr.io/enable-api-logging: "true"
+    spec:
+      containers:
+        - name: recurring
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8002
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

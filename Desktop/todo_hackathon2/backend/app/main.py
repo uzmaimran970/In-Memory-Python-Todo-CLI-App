@@ -27,7 +27,11 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     """Create database tables on application startup."""
-    create_db_and_tables()
+    try:
+        create_db_and_tables()
+        print("[STARTUP] Database tables created successfully")
+    except Exception as e:
+        print(f"[STARTUP] Warning: DB table creation failed (will retry on first request): {e}")
 
 
 @app.get("/")
@@ -48,8 +52,10 @@ async def health_check():
 
 
 # Import and include routers
-from app.routers import tasks, auth, mcp, chat
+from app.routers import tasks, auth, mcp, chat, internal, reminders
 app.include_router(auth.router)
 app.include_router(tasks.router)
+app.include_router(reminders.router)  # Reminder endpoints
 app.include_router(mcp.router)  # MCP Tools router
 app.include_router(chat.router)  # AI Chatbot router
+app.include_router(internal.router)  # Internal service-to-service API

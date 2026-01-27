@@ -1,0 +1,25 @@
+image:
+  repository: postgres
+  tag: "15-alpine"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 5432
+
+env:
+  POSTGRES_DB: tododb
+  POSTGRES_USER: todouser
+  POSTGRES_PASSWORD: todopassword123
+
+persistence:
+  enabled: true
+  size: 1Gi
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

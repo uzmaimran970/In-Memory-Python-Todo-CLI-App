@@ -97,9 +97,11 @@ MCP_TOOLS = [
     }
 ]
 
-# Models to try - in order of preference with fallbacks
+# Models to try - in order of preference with fallbacks (2025+)
 MODELS_TO_TRY = [
-    "command",                 # Basic command model (fallback)
+    "command-a-03-2025",       # Latest & best model (111B params)
+    "command-r-plus-08-2024",  # Strong fallback
+    "command-r-08-2024",       # Good fallback
 ]
 
 
@@ -159,7 +161,7 @@ def chat_with_tools(
             return {
                 "text": response_text,
                 "tool_calls": tool_calls,
-                "conversation_id": response.conversation_id or conversation_id or "default"
+                "conversation_id": getattr(response, 'conversation_id', None) or conversation_id or "default"
             }
 
         except Exception as e:

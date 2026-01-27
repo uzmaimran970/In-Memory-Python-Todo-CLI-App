@@ -1,0 +1,152 @@
+# Dapr Component Contracts for Phase 5
+# These are templates; actual values configured per environment
+
+---
+# Pub/Sub Component — Kafka
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: taskpubsub
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    - name: brokers
+      value: "{{KAFKA_BROKERS}}"  # kafka.default.svc.cluster.local:9092 (local) or Redpanda Cloud URL (cloud)
+    - name: authRequired
+      value: "{{KAFKA_AUTH_REQUIRED}}"  # "false" (local) or "true" (cloud)
+    - name: saslUsername
+      secretKeyRef:
+        name: kafka-credentials
+        key: username
+    - name: saslPassword
+      secretKeyRef:
+        name: kafka-credentials
+        key: password
+    - name: saslMechanism
+      value: "SCRAM-SHA-256"
+    - name: initialOffset
+      value: "oldest"
+    - name: disableTls
+      value: "{{KAFKA_DISABLE_TLS}}"  # "true" (local) or "false" (cloud)
+  auth:
+    secretStore: kubernetes-secrets
+
+---
+# State Store Component — PostgreSQL (Neon DB)
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: default
+spec:
+  type: state.postgresql
+  version: v2
+  metadata:
+    - name: connectionString
+      secretKeyRef:
+        name: db-credentials
+        key: connection-string
+    - name: tablePrefix
+      value: "dapr_"
+    - name: cleanupInterval
+      value: "1h"
+    - name: actorStateStore
+      value: "false"
+  auth:
+    secretStore: kubernetes-secrets
+
+---
+# Secrets Store Component — Kubernetes
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kubernetes-secrets
+  namespace: default
+spec:
+  type: secretstores.kubernetes
+  version: v1
+  metadata:
+    - name: defaultNamespace
+      value: "default"
+
+---
+# Cron Binding Component — Reminder Scanner
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: reminder-cron
+  namespace: default
+spec:
+  type: bindings.cron
+  version: v1
+  metadata:
+    - name: schedule
+      value: "@every 60s"
+    - name: direction
+      value: "input"
+
+---
+# Subscription — Task Events → Recurring Service
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: task-events-recurring-sub
+  namespace: default
+spec:
+  pubsubname: taskpubsub
+  topic: task-events
+  routes:
+    default: /events/tasks
+  deadLetterTopic: task-events-deadletter
+scopes:
+  - recurring-svc
+
+---
+# Subscription — Task Events → Audit Service
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: task-events-audit-sub
+  namespace: default
+spec:
+  pubsubname: taskpubsub
+  topic: task-events
+  routes:
+    default: /events/tasks
+  deadLetterTopic: task-events-deadletter
+scopes:
+  - audit-svc
+
+---
+# Subscription — Reminders → Notification Service
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: reminders-notification-sub
+  namespace: default
+spec:
+  pubsubname: taskpubsub
+  topic: reminders
+  routes:
+    default: /events/reminders
+  deadLetterTopic: reminders-deadletter
+scopes:
+  - notification-svc
+
+---
+# Subscription — Task Updates → WebSocket Service
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: task-updates-websocket-sub
+  namespace: default
+spec:
+  pubsubname: taskpubsub
+  topic: task-updates
+  routes:
+    default: /events/updates
+  deadLetterTopic: task-updates-deadletter
+scopes:
+  - websocket-svc

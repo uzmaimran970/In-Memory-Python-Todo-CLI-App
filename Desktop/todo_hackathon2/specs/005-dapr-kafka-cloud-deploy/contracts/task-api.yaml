@@ -1,0 +1,335 @@
+openapi: 3.0.3
+info:
+  title: Task API — Phase 5 Extensions
+  description: Extended task endpoints for recurring tasks, priorities, tags, and filtering
+  version: 2.0.0
+
+paths:
+  /api/tasks:
+    get:
+      summary: List tasks with filtering and sorting
+      operationId: listTasks
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, completed]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [high, medium, low]
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Keyword search in title and description
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [priority, due_date, created_at]
+            default: created_at
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+
+    post:
+      summary: Create a new task
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /api/tasks/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get task by ID
+      operationId: getTask
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Task not found
+
+    put:
+      summary: Update task
+      operationId: updateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+    delete:
+      summary: Delete task
+      operationId: deleteTask
+      responses:
+        '204':
+          description: Task deleted
+
+  /api/tasks/{task_id}/complete:
+    post:
+      summary: Mark task as completed
+      description: Completes the task and triggers recurring task generation if applicable
+      operationId: completeTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /api/tasks/{task_id}/reminder:
+    post:
+      summary: Set reminder for task
+      operationId: setReminder
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReminderCreate'
+      responses:
+        '201':
+          description: Reminder set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+
+    delete:
+      summary: Cancel reminder for task
+      operationId: cancelReminder
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Reminder cancelled
+
+components:
+  schemas:
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - user_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed, deleted]
+        priority:
+          type: string
+          enum: [high, medium, low]
+          default: medium
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+          maxItems: 10
+        due_date:
+          type: string
+          format: date-time
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceRule'
+        user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TaskCreate:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [high, medium, low]
+          default: medium
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        due_date:
+          type: string
+          format: date-time
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceRule'
+
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed]
+        priority:
+          type: string
+          enum: [high, medium, low]
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        due_date:
+          type: string
+          format: date-time
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceRule'
+
+    RecurrenceRule:
+      type: object
+      required:
+        - frequency
+      properties:
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly]
+        interval:
+          type: integer
+          minimum: 1
+          default: 1
+        end_date:
+          type: string
+          format: date-time
+        days_of_week:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+          description: For weekly frequency, 0=Mon..6=Sun
+
+    ReminderCreate:
+      type: object
+      required:
+        - scheduled_time
+      properties:
+        scheduled_time:
+          type: string
+          format: date-time
+
+    Reminder:
+      type: object
+      required:
+        - id
+        - task_id
+        - user_id
+        - scheduled_time
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        scheduled_time:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, sent, cancelled]
+        created_at:
+          type: string
+          format: date-time

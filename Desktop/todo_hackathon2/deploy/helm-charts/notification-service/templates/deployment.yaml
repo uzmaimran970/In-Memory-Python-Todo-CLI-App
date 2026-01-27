@@ -1,0 +1,36 @@
+# T016: Notification Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-notification
+  labels:
+    app: notification-svc
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: notification-svc
+  template:
+    metadata:
+      labels:
+        app: notification-svc
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "notification-svc"
+        dapr.io/app-port: "8001"
+        dapr.io/enable-api-logging: "true"
+    spec:
+      containers:
+        - name: notification
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: connection-string
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

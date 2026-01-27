@@ -11,12 +11,18 @@ export interface User {
   created_at: string;
 }
 
+// Task Priority (Phase 5)
+export type TaskPriority = 'high' | 'medium' | 'low';
+
 // Task Entity
 export interface Task {
   id: number;
   title: string;
   description?: string;
   is_completed: boolean;
+  priority?: TaskPriority;
+  tags?: string[];
+  due_date?: string;
   created_at: string;
   user_id: number;
 }
@@ -42,6 +48,9 @@ export interface LoginData {
 export interface CreateTaskData {
   title: string;
   description?: string;
+  priority?: TaskPriority;
+  tags?: string[];
+  due_date?: string;
 }
 
 export interface UpdateTaskData {

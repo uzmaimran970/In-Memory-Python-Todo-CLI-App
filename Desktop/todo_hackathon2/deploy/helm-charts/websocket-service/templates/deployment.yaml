@@ -1,0 +1,30 @@
+# T019: WebSocket Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-websocket
+  labels:
+    app: websocket-svc
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: websocket-svc
+  template:
+    metadata:
+      labels:
+        app: websocket-svc
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "websocket-svc"
+        dapr.io/app-port: "8004"
+        dapr.io/enable-api-logging: "true"
+    spec:
+      containers:
+        - name: websocket
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8004
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

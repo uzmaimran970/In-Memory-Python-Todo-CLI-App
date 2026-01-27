@@ -1,0 +1,14 @@
+# T019: WebSocket Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-websocket
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8004
+      nodePort: {{ .Values.service.nodePort }}
+      protocol: TCP
+  selector:
+    app: websocket-svc

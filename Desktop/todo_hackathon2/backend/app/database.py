@@ -1,10 +1,23 @@
 """Database connection and session management."""
+import os
 from sqlmodel import create_engine, Session, SQLModel
 from app.config import settings
 from typing import Generator
 
 
-# Create SQLModel engine with connection pooling for Neon PostgreSQL
+# Determine SSL mode based on environment
+# Use 'require' for cloud databases (Neon), 'disable' for local development
+def get_connect_args():
+    """Get database connection arguments based on environment."""
+    db_url = settings.database_url.lower()
+    # If using Neon or other cloud PostgreSQL, require SSL
+    if 'neon.tech' in db_url or 'sslmode=require' in db_url:
+        return {"sslmode": "require"}
+    # For local development, disable SSL
+    return {"sslmode": "disable"}
+
+
+# Create SQLModel engine with connection pooling
 engine = create_engine(
     settings.database_url,
     echo=False,  # Set True for SQL query logging in development
@@ -12,9 +25,7 @@ engine = create_engine(
     max_overflow=10,  # Max 10 additional connections if pool exhausted
     pool_pre_ping=True,  # Verify connections before use (detect stale connections)
     pool_recycle=3600,  # Recycle connections after 1 hour
-    connect_args={
-        "sslmode": "require",  # Neon PostgreSQL requires SSL
-    }
+    connect_args=get_connect_args()
 )
 
 

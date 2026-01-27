@@ -1,0 +1,17 @@
+# T009: Cron Binding Component for Reminder Scanner
+# Triggers every 60 seconds to check for due reminders
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: reminder-cron
+  namespace: todo-app
+spec:
+  type: bindings.cron
+  version: v1
+  metadata:
+    - name: schedule
+      value: "@every 60s"
+    - name: direction
+      value: "input"
+scopes:
+  - notification-svc

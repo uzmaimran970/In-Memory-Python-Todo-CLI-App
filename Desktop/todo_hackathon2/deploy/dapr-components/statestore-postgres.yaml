@@ -1,0 +1,21 @@
+# T007: PostgreSQL State Store Component for Dapr
+# Used for task cache and conversation state
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: todo-app
+spec:
+  type: state.postgresql
+  version: v2
+  metadata:
+    - name: connectionString
+      secretKeyRef:
+        name: db-credentials
+        key: connection-string
+    - name: tablePrefix
+      value: "dapr_"
+    - name: cleanupInterval
+      value: "1h"
+    - name: actorStateStore
+      value: "false"

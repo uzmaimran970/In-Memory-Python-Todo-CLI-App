@@ -1,0 +1,13 @@
+# T017: Recurring Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-recurring
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8002
+      protocol: TCP
+  selector:
+    app: recurring-svc

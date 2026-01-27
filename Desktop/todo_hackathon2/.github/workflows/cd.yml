@@ -1,0 +1,137 @@
+# CD Pipeline (T074)
+# Builds, pushes images, and deploys to Kubernetes cluster
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  # Build and push Docker images
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - service: backend
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+          - service: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+          - service: recurring-service
+            context: ./services/recurring
+            dockerfile: ./services/recurring/Dockerfile
+          - service: notification-service
+            context: ./services/notification
+            dockerfile: ./services/notification/Dockerfile
+          - service: websocket-service
+            context: ./services/websocket
+            dockerfile: ./services/websocket/Dockerfile
+          - service: audit-service
+            context: ./services/audit
+            dockerfile: ./services/audit/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Deploy to Kubernetes
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Get image tag
+        id: tag
+        run: echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Deploy Backend
+        run: |
+          helm upgrade --install backend deploy/helm-charts/backend/ \
+            --namespace todo-app \
+            --create-namespace \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backend \
+            --set image.tag=${{ steps.tag.outputs.TAG }} \
+            --set env.DATABASE_URL=${{ secrets.DATABASE_URL }} \
+            --set env.JWT_SECRET=${{ secrets.JWT_SECRET }}
+
+      - name: Deploy Frontend
+        run: |
+          helm upgrade --install frontend deploy/helm-charts/frontend/ \
+            --namespace todo-app \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend \
+            --set image.tag=${{ steps.tag.outputs.TAG }}
+
+      - name: Deploy Microservices
+        run: |
+          for svc in recurring-service notification-service websocket-service audit-service; do
+            helm upgrade --install $svc deploy/helm-charts/$svc/ \
+              --namespace todo-app \
+              --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/$svc \
+              --set image.tag=${{ steps.tag.outputs.TAG }}
+          done
+
+      - name: Deploy Dapr Components
+        run: |
+          kubectl apply -f deploy/dapr-components/ -n todo-app
+
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/backend -n todo-app --timeout=120s
+          kubectl rollout status deployment/frontend -n todo-app --timeout=120s

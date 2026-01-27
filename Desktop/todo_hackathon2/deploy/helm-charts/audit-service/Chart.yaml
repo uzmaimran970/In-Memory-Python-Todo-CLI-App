@@ -1,0 +1,7 @@
+# T018: Audit Service Helm Chart
+apiVersion: v2
+name: audit-service
+description: Audit microservice - consumes task-events and logs all operations
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

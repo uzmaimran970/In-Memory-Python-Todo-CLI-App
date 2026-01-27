@@ -16,7 +16,8 @@ import {
 } from '@/types';
 import { getAuthToken, clearAuthToken } from './auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://in-memory-python-todo-cli-app-production.up.railway.app";
+// Use relative URL - Next.js rewrites will proxy to backend
+const API_BASE_URL = "";
 // Log configuration on module load
 console.log('[API] Configuration loaded:', {
   API_BASE_URL,

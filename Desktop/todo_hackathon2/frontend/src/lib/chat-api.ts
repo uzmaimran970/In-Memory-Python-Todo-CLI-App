@@ -5,7 +5,8 @@
 
 import { getAuthToken } from './auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://in-memory-python-todo-cli-app-production.up.railway.app";
+// Use relative URL to go through Next.js proxy (configured in next.config.ts)
+const API_BASE_URL = "";
 
 export interface ChatMessage {
   id: string;

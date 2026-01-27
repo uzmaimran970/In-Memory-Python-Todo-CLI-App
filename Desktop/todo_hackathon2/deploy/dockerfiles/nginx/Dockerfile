@@ -1,0 +1,17 @@
+# Sample Nginx Dockerfile for testing
+# Used to verify basic container functionality
+
+FROM nginx:latest
+
+# Copy custom configuration if needed
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Expose port 80
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

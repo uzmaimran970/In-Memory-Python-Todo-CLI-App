@@ -1,7 +1,7 @@
 """Pydantic request and response schemas for API validation."""
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 
 # Request Schemas
@@ -13,6 +13,9 @@ class TaskCreate(BaseModel):
     Validation:
     - title: Required, 1-200 characters
     - description: Optional, max 1000 characters
+    - priority: Optional (high/medium/low), defaults to medium
+    - tags: Optional list of strings
+    - due_date: Optional datetime
 
     Note: user_id is NOT accepted from request (set from JWT)
     """
@@ -28,6 +31,18 @@ class TaskCreate(BaseModel):
         description="Optional task description",
         examples=["Implement all REST endpoints with FastAPI and SQLModel"]
     )
+    priority: Optional[str] = Field(
+        default="medium",
+        description="Task priority: high, medium, or low"
+    )
+    tags: Optional[List[str]] = Field(
+        default=None,
+        description="Task tags for categorization"
+    )
+    due_date: Optional[datetime] = Field(
+        default=None,
+        description="Task due date (UTC)"
+    )
 
 
 class TaskUpdate(BaseModel):
@@ -37,11 +52,17 @@ class TaskUpdate(BaseModel):
     Validation:
     - title: Required, 1-200 characters
     - description: Optional, max 1000 characters
+    - priority: Optional (high/medium/low)
+    - tags: Optional list of strings
+    - due_date: Optional datetime
 
     Note: completed status is NOT updated here (use PATCH /complete endpoint)
     """
     title: str = Field(min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=1000)
+    priority: Optional[str] = Field(default=None, description="Task priority: high, medium, or low")
+    tags: Optional[List[str]] = Field(default=None, description="Task tags")
+    due_date: Optional[datetime] = Field(default=None, description="Task due date (UTC)")
 
 
 # Response Schemas
@@ -63,6 +84,9 @@ class TaskResponse(BaseModel):
         alias="completed",           # Accept 'completed' as input
         serialization_alias="is_completed"  # Always output as 'is_completed'
     )
+    priority: Optional[str] = None
+    tags: Optional[List[str]] = None
+    due_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -114,3 +138,48 @@ class AuthResponse(BaseModel):
     """Response schema for authentication (signup/login)."""
     token: str = Field(description="JWT authentication token")
     user: UserResponse
+
+
+# Reminder Schemas (Phase 5 - T038)
+
+class ReminderCreate(BaseModel):
+    """Request schema for creating a reminder on a task."""
+    remind_at: datetime = Field(description="When to send the reminder (UTC)")
+
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [{"remind_at": "2026-01-24T09:00:00Z"}]
+    })
+
+
+class ReminderResponse(BaseModel):
+    """Response schema for reminder data."""
+    id: int
+    task_id: int
+    user_id: str
+    remind_at: datetime
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Recurrence Schemas (Phase 5)
+
+class RecurrenceRuleCreate(BaseModel):
+    """Request schema for creating a recurrence rule."""
+    frequency: str = Field(description="daily, weekly, or monthly")
+    interval: int = Field(default=1, ge=1, le=365, description="Every N units")
+    end_date: Optional[datetime] = Field(default=None, description="Stop recurring after this date")
+    days_of_week: Optional[list[int]] = Field(default=None, description="For weekly: days 0=Mon..6=Sun")
+
+
+class RecurrenceRuleResponse(BaseModel):
+    """Response schema for recurrence rule data."""
+    id: int
+    frequency: str
+    interval: int
+    end_date: Optional[datetime]
+    days_of_week: Optional[list[int]]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

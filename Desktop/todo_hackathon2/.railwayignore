@@ -1,0 +1,14 @@
+nul
+*.mp4
+*.mp3
+*.jpg
+*.png
+*.pdf
+*.lnk
+node_modules
+.git
+__pycache__
+.venv
+*.log
+.env
+minikube-linux-amd64.deb

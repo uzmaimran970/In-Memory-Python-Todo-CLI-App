@@ -6,6 +6,7 @@
 export type {
   User,
   Task,
+  TaskPriority,
   AuthResponse,
   SignupData,
   LoginData,

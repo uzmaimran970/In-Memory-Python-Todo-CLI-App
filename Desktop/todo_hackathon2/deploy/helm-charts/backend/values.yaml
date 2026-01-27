@@ -1,0 +1,26 @@
+replicaCount: 1
+
+image:
+  repository: todo-backend
+  pullPolicy: Never  # Use local image from minikube's Docker daemon
+  tag: "latest"
+
+service:
+  type: ClusterIP   # Internal only - NOT accessible from outside cluster
+  port: 8000
+  targetPort: 8000
+
+env:
+  DATABASE_URL: ""
+  BETTER_AUTH_SECRET: ""
+  # Allow CORS from frontend service (internal Kubernetes communication)
+  CORS_ORIGINS: "http://todo-frontend:8080,http://todo-frontend:3000"
+  COHERE_API_KEY: ""
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

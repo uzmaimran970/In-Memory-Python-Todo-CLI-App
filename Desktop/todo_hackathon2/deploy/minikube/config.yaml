@@ -1,0 +1,24 @@
+# Minikube Configuration
+# This file contains configuration settings for the local Minikube cluster
+
+# Driver to use for the VM
+driver: docker
+
+# Number of CPUs to allocate to the Minikube VM
+cpus: 2
+
+# Amount of RAM to allocate to the Minikube VM
+memory: 4096mb
+
+# Kubernetes version to use
+kubernetes-version: v1.28.0
+
+# Extra configuration for the Kubernetes API server
+extra-config:
+  apiserver.enable-admission-plugins: "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
+
+# Enable specific addons by default
+addons:
+  - ingress
+  - metrics-server
+  - dashboard

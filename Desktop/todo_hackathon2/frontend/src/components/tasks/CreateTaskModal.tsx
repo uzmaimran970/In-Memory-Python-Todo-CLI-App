@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useCallback, memo } from 'react';
-import { Task, CreateTaskData } from '@/types';
+import { Task, CreateTaskData, TaskPriority } from '@/types';
 import { api } from '@/lib/api';
 import { validateTitle, validateDescription } from '@/lib/validation';
 import { toast } from 'react-hot-toast';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import PriorityPicker from './PriorityPicker';
+import TagInput from './TagInput';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -22,6 +24,9 @@ function CreateTaskModal({
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState<TaskPriority>('medium');
+  const [tags, setTags] = useState<string[]>([]);
+  const [dueDate, setDueDate] = useState('');
   const [titleError, setTitleError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,6 +38,9 @@ function CreateTaskModal({
   const resetForm = () => {
     setTitle('');
     setDescription('');
+    setPriority('medium');
+    setTags([]);
+    setDueDate('');
     setTitleError(null);
     setDescriptionError(null);
     setIsSubmitting(false);
@@ -78,6 +86,9 @@ function CreateTaskModal({
       const taskData: CreateTaskData = {
         title: title.trim(),
         description: description.trim() || undefined,
+        priority,
+        tags: tags.length > 0 ? tags : undefined,
+        due_date: dueDate || undefined,
       };
 
       const newTask = await api.createTask(taskData);
@@ -173,6 +184,27 @@ function CreateTaskModal({
             <p className="mt-1.5 text-sm text-red-600">{descriptionError}</p>
           )}
           <p className="mt-1.5 text-xs text-gray-500 text-right">{description.length}/1000</p>
+        </div>
+
+        {/* Priority Picker (Phase 5) */}
+        <PriorityPicker value={priority} onChange={setPriority} disabled={isSubmitting} />
+
+        {/* Tags Input (Phase 5) */}
+        <TagInput tags={tags} onChange={setTags} disabled={isSubmitting} />
+
+        {/* Due Date (Phase 5) */}
+        <div className="w-full">
+          <label htmlFor="task-due-date" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Due Date
+          </label>
+          <input
+            id="task-due-date"
+            type="datetime-local"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            disabled={isSubmitting}
+            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-600 transition-all duration-200 disabled:opacity-50 text-sm"
+          />
         </div>
 
         {/* Action Buttons */}

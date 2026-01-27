@@ -1,0 +1,219 @@
+# Kafka Event Schemas for Phase 5
+
+asyncapi: 2.6.0
+info:
+  title: Todo App Event-Driven API
+  version: 1.0.0
+  description: Event schemas for Kafka topics used in Phase 5 Dapr integration
+
+channels:
+  task-events:
+    description: All task CRUD operations
+    subscribe:
+      summary: Consume task events for recurring tasks and audit logging
+      message:
+        $ref: '#/components/messages/TaskEvent'
+    publish:
+      summary: Publish task events when tasks are created, updated, deleted, or completed
+      message:
+        $ref: '#/components/messages/TaskEvent'
+
+  reminders:
+    description: Scheduled reminder notifications
+    subscribe:
+      summary: Consume reminder events to send notifications
+      message:
+        $ref: '#/components/messages/ReminderEvent'
+    publish:
+      summary: Publish reminder events when due dates are set
+      message:
+        $ref: '#/components/messages/ReminderEvent'
+
+  task-updates:
+    description: Real-time task changes for WebSocket broadcast
+    subscribe:
+      summary: Consume task updates for WebSocket push
+      message:
+        $ref: '#/components/messages/TaskUpdateEvent'
+    publish:
+      summary: Publish task updates for real-time sync
+      message:
+        $ref: '#/components/messages/TaskUpdateEvent'
+
+  task-events-deadletter:
+    description: Failed task events after retry exhaustion
+    subscribe:
+      summary: Monitor failed events for debugging
+      message:
+        $ref: '#/components/messages/TaskEvent'
+
+components:
+  messages:
+    TaskEvent:
+      name: TaskEvent
+      title: Task Event
+      contentType: application/cloudevents+json
+      payload:
+        $ref: '#/components/schemas/TaskEventPayload'
+
+    ReminderEvent:
+      name: ReminderEvent
+      title: Reminder Event
+      contentType: application/cloudevents+json
+      payload:
+        $ref: '#/components/schemas/ReminderEventPayload'
+
+    TaskUpdateEvent:
+      name: TaskUpdateEvent
+      title: Task Update Event
+      contentType: application/cloudevents+json
+      payload:
+        $ref: '#/components/schemas/TaskUpdatePayload'
+
+  schemas:
+    TaskEventPayload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - task_id
+        - user_id
+        - timestamp
+        - payload
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: Unique event identifier
+        event_type:
+          type: string
+          enum:
+            - created
+            - updated
+            - deleted
+            - completed
+          description: Type of task operation
+        task_id:
+          type: string
+          format: uuid
+          description: ID of the affected task
+        user_id:
+          type: string
+          format: uuid
+          description: ID of user who triggered the event
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event occurred
+        payload:
+          type: object
+          description: Task state at event time
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            status:
+              type: string
+            priority:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+            due_date:
+              type: string
+              format: date-time
+            recurrence:
+              type: object
+              properties:
+                frequency:
+                  type: string
+                interval:
+                  type: integer
+                end_date:
+                  type: string
+                  format: date-time
+        metadata:
+          type: object
+          description: Additional context
+          properties:
+            source:
+              type: string
+              description: Service that generated the event
+            trace_id:
+              type: string
+              description: Distributed tracing ID
+
+    ReminderEventPayload:
+      type: object
+      required:
+        - reminder_id
+        - task_id
+        - user_id
+        - scheduled_time
+        - action
+      properties:
+        reminder_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        scheduled_time:
+          type: string
+          format: date-time
+        action:
+          type: string
+          enum:
+            - schedule
+            - cancel
+            - fire
+          description: |
+            - schedule: Create new reminder job
+            - cancel: Cancel existing reminder
+            - fire: Reminder time reached, send notification
+        task_title:
+          type: string
+          description: Task title for notification content
+
+    TaskUpdatePayload:
+      type: object
+      required:
+        - update_id
+        - task_id
+        - user_id
+        - change_type
+        - timestamp
+      properties:
+        update_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        change_type:
+          type: string
+          enum:
+            - created
+            - updated
+            - deleted
+            - completed
+        timestamp:
+          type: string
+          format: date-time
+        task_snapshot:
+          type: object
+          description: Current task state for UI update
+        affected_clients:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: User IDs that should receive this update

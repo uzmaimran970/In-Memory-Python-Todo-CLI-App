@@ -1,0 +1,20 @@
+# T019: WebSocket Service values
+replicaCount: 1
+
+image:
+  repository: websocket-svc
+  pullPolicy: Never
+  tag: "latest"
+
+service:
+  type: NodePort
+  port: 8004
+  nodePort: 30084
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

@@ -1,0 +1,22 @@
+# T016: Notification Service values
+replicaCount: 1
+
+image:
+  repository: notification-svc
+  pullPolicy: Never
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 8001
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+env:
+  DATABASE_URL: ""

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-backend
+  labels:
+    app: {{ .Release.Name }}-backend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-backend
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-backend
+      annotations:
+        # T014: Dapr sidecar annotations for event-driven architecture
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "backend-svc"
+        dapr.io/app-port: "8000"
+        dapr.io/enable-api-logging: "true"
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: "{{ .Values.env.DATABASE_URL }}"
+            - name: BETTER_AUTH_SECRET
+              value: "{{ .Values.env.BETTER_AUTH_SECRET }}"
+            - name: CORS_ORIGINS
+              value: "{{ .Values.env.CORS_ORIGINS }}"
+            - name: COHERE_API_KEY
+              value: "{{ .Values.env.COHERE_API_KEY }}"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
